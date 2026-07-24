@@ -20,6 +20,13 @@ if "logged_in" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# Banco de dados de usuários cadastrados
+if "users_db" not in st.session_state:
+    st.session_state.users_db = [
+        {"nome": "Administrador", "email": "admin@calabria.org.br", "senha": "123"},
+        {"nome": "Auditor 5S", "email": "usuario@calabria.org.br", "senha": "123"}
+    ]
+
 if "areas" not in st.session_state:
     st.session_state.areas = [
         {"id": 1, "nome": "Almoxarifado", "responsavel": "João Silva"},
@@ -52,30 +59,84 @@ if "acomp" not in st.session_state:
     ]
 
 # -----------------------------------------------------------------------------
-# 🔐 Tela de Login
+# 🔐 Módulo de Autenticação (Login, Cadastro e Recuperação de Senha)
 # -----------------------------------------------------------------------------
-def render_login():
-    st.markdown("<h2 style='text-align: center;'>🔐 Acesso ao Sistema 5S</h2>", unsafe_allow_html=True)
+def render_auth_page():
+    st.markdown("<h2 style='text-align: center;'>🔐 Central de Acesso - Sistema 5S</h2>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        with st.form("form_login"):
-            usuario = st.text_input("Usuário / E-mail")
-            senha = st.text_input("Senha", type="password")
-            btn_entrar = st.form_submit_button("Entrar", use_container_width=True)
-            
-            if btn_entrar:
-                # Login simples de demonstração (Pode integrar com API/Banco)
-                if usuario and senha:
-                    st.session_state.logged_in = True
-                    st.session_state.user = {"email": usuario}
-                    st.success("Login realizado com sucesso!")
-                    st.rerun()
-                else:
-                    st.error("Por favor, preencha o usuário e a senha.")
+        tab_login, tab_register, tab_reset = st.tabs(["Entrar", "Criar Conta", "Esqueci a Senha"])
+        
+        # --- ABA 1: LOGIN ---
+        with tab_login:
+            with st.form("form_login"):
+                usuario = st.text_input("E-mail / Usuário")
+                senha = st.text_input("Senha", type="password")
+                btn_entrar = st.form_submit_button("Entrar", use_container_width=True)
+                
+                if btn_entrar:
+                    user_found = next(
+                        (u for u in st.session_state.users_db if u["email"].lower() == usuario.lower().strip() and u["senha"] == senha), 
+                        None
+                    )
+                    if user_found:
+                        st.session_state.logged_in = True
+                        st.session_state.user = user_found
+                        st.success(f"Bem-vindo(a), {user_found['nome']}!")
+                        st.rerun()
+                    else:
+                        st.error("E-mail ou senha incorretos.")
+
+        # --- ABA 2: CADASTRO DE NOVO USUÁRIO ---
+        with tab_register:
+            with st.form("form_cadastro"):
+                novo_nome = st.text_input("Nome Completo")
+                novo_email = st.text_input("E-mail corporativo")
+                nova_senha = st.text_input("Nova Senha", type="password")
+                confirma_senha = st.text_input("Confirme a Senha", type="password")
+                btn_cadastrar = st.form_submit_button("Cadastrar Usuário", use_container_width=True)
+                
+                if btn_cadastrar:
+                    if not novo_nome or not novo_email or not nova_senha:
+                        st.error("Por favor, preencha todos os campos obrigatórios.")
+                    elif nova_senha != confirma_senha:
+                        st.error("As senhas não coincidem.")
+                    elif any(u["email"].lower() == novo_email.lower().strip() for u in st.session_state.users_db):
+                        st.warning("Este e-mail já está cadastrado no sistema.")
+                    else:
+                        st.session_state.users_db.append({
+                            "nome": novo_nome,
+                            "email": novo_email.strip(),
+                            "senha": nova_senha
+                        })
+                        st.success("Conta criada com sucesso! Agora vá para a aba 'Entrar' e faça login.")
+
+        # --- ABA 3: RECUPERAÇÃO DE SENHA ---
+        with tab_reset:
+            with st.form("form_recuperar_senha"):
+                email_recuperacao = st.text_input("Digite o seu e-mail cadastrado")
+                nova_senha_rec = st.text_input("Digite a nova senha", type="password")
+                confirma_senha_rec = st.text_input("Confirme a nova senha", type="password")
+                btn_recuperar = st.form_submit_button("Redefinir Senha", use_container_width=True)
+                
+                if btn_recuperar:
+                    user_to_reset = next(
+                        (u for u in st.session_state.users_db if u["email"].lower() == email_recuperacao.lower().strip()), 
+                        None
+                    )
+                    if not user_to_reset:
+                        st.error("E-mail não encontrado no sistema.")
+                    elif nova_senha_rec != confirma_senha_rec:
+                        st.error("As senhas informadas não coincidem.")
+                    elif not nova_senha_rec:
+                        st.error("Digite uma senha válida.")
+                    else:
+                        user_to_reset["senha"] = nova_senha_rec
+                        st.success("Senha redefinida com sucesso! Você já pode realizar o login com a nova senha.")
 
 # -----------------------------------------------------------------------------
-# Cabeçalho da Aplicação
+# Cabeçalho da Aplicação (Área Logada)
 # -----------------------------------------------------------------------------
 def render_header():
     col_logo, col_title, col_user = st.columns([1, 3, 2])
@@ -91,7 +152,10 @@ def render_header():
         st.caption("Gestão de Qualidade e Organização")
 
     with col_user:
-        st.markdown(f"**Usuário:** `{st.session_state.user['email']}`")
+        nome_user = st.session_state.user.get('nome', 'Usuário')
+        email_user = st.session_state.user.get('email', '')
+        st.markdown(f"**Olá, {nome_user}**")
+        st.markdown(f"`{email_user}`")
         if st.button("Sair / Logout"):
             st.session_state.logged_in = False
             st.session_state.user = None
@@ -170,12 +234,10 @@ def render_acomp_section(areas):
             }
             
             if acomp_para_editar:
-                # Atualizar existente
                 idx = st.session_state.acomp.index(acomp_para_editar)
                 st.session_state.acomp[idx] = dados
                 st.success("Acompanhamento 5S atualizado com sucesso!")
             else:
-                # Novo
                 st.session_state.acomp.append(dados)
                 st.success("Novo Acompanhamento 5S salvo com sucesso!")
             
@@ -204,7 +266,7 @@ def render_dashboard_section(acomp):
     st.bar_chart(df_area, x="area", y="nota", color="#2563eb")
 
 # -----------------------------------------------------------------------------
-# 📄 Seção 3: Relatórios Filtrados, PDF, E-mail e Relatório Geral
+# 📄 Seção 3: Relatórios
 # -----------------------------------------------------------------------------
 def render_reports_section(acomp):
     st.subheader("📄 Relatórios de Acompanhamento 5S")
@@ -227,7 +289,6 @@ def render_reports_section(acomp):
     
     sel_busca = f_col3.text_input("Buscar por termo (obs/área)")
 
-    # Aplicação dos filtros
     df_filtered = df.copy()
     if sel_area != "Todas":
         df_filtered = df_filtered[df_filtered["area"] == sel_area]
@@ -239,7 +300,6 @@ def render_reports_section(acomp):
     st.write("---")
     st.markdown(f"### 📋 Registros Encontrados ({len(df_filtered)})")
     
-    # Exibição da tabela formatada
     col_exibicao = ["id", "area", "data", "nota", "status", "foto_url", "obs"]
     st.dataframe(
         df_filtered[col_exibicao], 
@@ -252,11 +312,9 @@ def render_reports_section(acomp):
 
     st.write("---")
     
-    # 🖨️ Ações do Relatório: PDF, CSV e E-mail
     st.markdown("### 🛠️ Ações e Exportação")
     exp_col1, exp_col2, exp_col3 = st.columns(3)
     
-    # Exportar CSV
     csv_data = df_filtered.to_csv(index=False).encode('utf-8')
     exp_col1.download_button(
         "📥 Exportar para CSV",
@@ -266,11 +324,8 @@ def render_reports_section(acomp):
         use_container_width=True
     )
     
-    # Gerar Relatório Geral / Impressão PDF
     if exp_col2.button("🖨️ Gerar PDF / Imprimir", use_container_width=True):
-        st.info("Para salvar em PDF: Clique no botão abaixo para abrir a visualização limpa e use **Ctrl + P** (Imprimir) salvando como PDF.")
-        
-        # Gerando HTML limpo para impressão
+        st.info("Para salvar em PDF: Use **Ctrl + P** na janela do navegador que abrir abaixo.")
         html_content = f"""
         <h2>Relatório Geral de Acompanhamento 5S</h2>
         <p><b>Data do Relatório:</b> {datetime.date.today().strftime('%d/%m/%Y')}</p>
@@ -279,7 +334,6 @@ def render_reports_section(acomp):
         """
         st.components.v1.html(html_content, height=300, scrolling=True)
 
-    # Enviar por E-mail
     with exp_col3.popover("✉️ Enviar por E-mail", use_container_width=True):
         st.markdown("#### Enviar Relatório")
         email_destino = st.text_input("E-mail do Destinatário")
@@ -352,14 +406,13 @@ def render_consultor_ia():
 # -----------------------------------------------------------------------------
 def main():
     if not st.session_state.logged_in:
-        render_login()
+        render_auth_page()
     else:
         render_header()
         
         areas = st.session_state.areas
         acomp = st.session_state.acomp
         
-        # Abas da Aplicação
         tab_acomp, tab_dash, tab_reports, tab_config, tab_ia = st.tabs([
             "📋 Acompanhamento 5S", 
             "📊 Dashboard", 
