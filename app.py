@@ -323,7 +323,7 @@ def tela_principal():
             "Relatório Geral 5S (Executivo)",
             "Enviar Relatório por E-mail",
             "Gestão de Áreas",
-            "Assistente IA 5S"
+            
         ]
     )
 
