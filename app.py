@@ -118,6 +118,24 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
         nota = row['pontuacao']
         cor_badge = "#27ae60" if nota >= 80 else ("#f39c12" if nota >= 60 else "#e74c3c")
         
+        # Formatação detalhada das observações e itens do checklist
+        obs_itens_html = ""
+        obs_itens_dict = row.get("observacoes_itens", {})
+        checklist_dict = row.get("checklist", {})
+        
+        if obs_itens_dict or checklist_dict:
+            detalhes = []
+            for item, nota_item in checklist_dict.items():
+                obs_especifica = obs_itens_dict.get(item, "")
+                texto_obs = f" - <i>{obs_especifica}</i>" if obs_especifica else ""
+                detalhes.append(f"• <b>{item}</b>: {nota_item}/5{texto_obs}")
+            if detalhes:
+                obs_itens_html = "<br><div style='font-size:7.5pt; color:#475569; margin-top:4px; padding-top:4px; border-top:1px dashed #cbd5e1;'>" + "<br>".join(detalhes) + "</div>"
+
+        obs_gerais = row.get('observacoes', '-')
+        if not obs_gerais or obs_gerais.strip() == "":
+            obs_gerais = "<i>Sem observações gerais</i>"
+
         linhas_tabela += f"""
         <tr>
             <td>#{row['id']}</td>
@@ -125,7 +143,10 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
             <td><b>{row['area']}</b></td>
             <td>{row['responsavel']}</td>
             <td style="text-align: center;"><span style="background-color: {cor_badge}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">{nota:.1f} / 100</span></td>
-            <td>{row.get('observacoes', '-')}</td>
+            <td>
+                <b>Obs. Gerais:</b> {obs_gerais}
+                {obs_itens_html}
+            </td>
             <td style="text-align: center;">{foto_html}</td>
         </tr>
         """
@@ -136,19 +157,20 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
     <head>
         <meta charset="UTF-8">
         <style>
-            @page {{ size: A4 portrait; margin: 15mm 12mm; }}
+            @page {{ size: A4 portrait; margin: 12mm 10mm; }}
             body {{ font-family: 'Helvetica', 'Arial', sans-serif; color: #2c3e50; margin: 0; }}
-            .header {{ background-color: #1e3a8a; color: white; padding: 20px; border-radius: 6px; margin-bottom: 20px; }}
-            .header h1 {{ margin: 0 0 5px 0; font-size: 20pt; }}
-            .summary-box {{ width: 100%; margin-bottom: 20px; border-collapse: collapse; }}
-            .summary-card {{ background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; text-align: center; }}
-            .summary-card .number {{ font-size: 18pt; font-weight: bold; color: #1e3a8a; }}
-            .summary-card .label {{ font-size: 9pt; color: #64748b; text-transform: uppercase; }}
+            .header {{ background-color: #1e3a8a; color: white; padding: 15px; border-radius: 6px; margin-bottom: 15px; }}
+            .header h1 {{ margin: 0 0 5px 0; font-size: 18pt; }}
+            .header p {{ margin: 0; font-size: 9pt; opacity: 0.9; }}
+            .summary-box {{ width: 100%; margin-bottom: 15px; border-collapse: collapse; }}
+            .summary-card {{ background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; text-align: center; }}
+            .summary-card .number {{ font-size: 16pt; font-weight: bold; color: #1e3a8a; }}
+            .summary-card .label {{ font-size: 8pt; color: #64748b; text-transform: uppercase; }}
             table.data-table {{ width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 6px; overflow: hidden; }}
-            table.data-table th {{ background-color: #3b82f6; color: white; padding: 8px 10px; font-size: 9pt; text-align: left; }}
-            table.data-table td {{ padding: 8px 10px; font-size: 8.5pt; border-bottom: 1px solid #e2e8f0; }}
+            table.data-table th {{ background-color: #3b82f6; color: white; padding: 8px 6px; font-size: 8.5pt; text-align: left; }}
+            table.data-table td {{ padding: 8px 6px; font-size: 8pt; border-bottom: 1px solid #e2e8f0; vertical-align: top; }}
             table.data-table tr:nth-child(even) {{ background-color: #f8fafc; }}
-            .footer {{ margin-top: 30px; text-align: center; font-size: 8pt; color: #94a3b8; }}
+            .footer {{ margin-top: 20px; text-align: center; font-size: 7.5pt; color: #94a3b8; }}
         </style>
     </head>
     <body>
@@ -159,13 +181,13 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
 
         <table class="summary-box">
             <tr>
-                <td style="padding-right: 10px;">
+                <td style="padding-right: 10px; width: 50%;">
                     <div class="summary-card">
                         <div class="number">{total_acompanhamentos}</div>
                         <div class="label">Total de Acompanhamentos</div>
                     </div>
                 </td>
-                <td style="padding-left: 10px;">
+                <td style="padding-left: 10px; width: 50%;">
                     <div class="summary-card">
                         <div class="number">{media_geral:.1f} pts</div>
                         <div class="label">Média Geral de Desempenho</div>
@@ -174,17 +196,17 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
             </tr>
         </table>
 
-        <h3>Detalhamento dos Registros</h3>
+        <h3 style="font-size: 11pt; margin-bottom: 8px;">Detalhamento dos Registros e Checklists</h3>
         <table class="data-table">
             <thead>
                 <tr>
-                    <th style="width: 5%;">ID</th>
-                    <th style="width: 18%;">Data/Hora</th>
-                    <th style="width: 15%;">Área</th>
-                    <th style="width: 15%;">Responsável</th>
+                    <th style="width: 6%;">ID</th>
+                    <th style="width: 14%;">Data/Hora</th>
+                    <th style="width: 13%;">Área</th>
+                    <th style="width: 13%;">Responsável</th>
                     <th style="width: 12%;">Pontuação</th>
-                    <th style="width: 25%;">Observações Gerais</th>
-                    <th style="width: 10%;">Foto</th>
+                    <th style="width: 33%;">Observações e Itens Avaliados</th>
+                    <th style="width: 9%;">Foto</th>
                 </tr>
             </thead>
             <tbody>
@@ -290,8 +312,7 @@ def tela_principal():
             "Relatório Filtrado & Exportação PDF",
             "Relatório Geral 5S (Executivo)",
             "Enviar Relatório por E-mail",
-            "Gestão de Áreas",
-            
+            "Gestão de Áreas"
         ]
     )
 
@@ -329,10 +350,8 @@ def tela_principal():
             st.warning("Nenhuma área cadastrada. Cadastre áreas na aba 'Gestão de Áreas' antes de continuar.")
             return
 
-        # Seleção de Área fora do form para atualizar o checklist dinamicamente
         area_selecionada = st.selectbox("Selecione a Área para Auditoria:", st.session_state.db["areas"])
         
-        # Obtém a lista de pontos a observar para a área escolhida (ou uma lista genérica caso seja nova)
         pontos_observar = CHECKLIST_AREAS.get(
             area_selecionada, 
             ["Organização Geral", "Limpeza e Higiene", "Conservação de Equipamentos e Espaço"]
@@ -348,7 +367,6 @@ def tela_principal():
             respostas_checklist = {}
             observacoes_checklist = {}
 
-            # Geração dinâmica dos itens do checklist
             for idx, ponto in enumerate(pontos_observar):
                 st.markdown(f"**Item {idx + 1}: {ponto}**")
                 col_nota, col_obs = st.columns([1, 2])
@@ -358,7 +376,7 @@ def tela_principal():
                         f"Grau de aplicação:",
                         options=list(ESCALA_AVALIACAO.keys()),
                         format_func=lambda x: ESCALA_AVALIACAO[x],
-                        index=4, # Padrão: Muito Bom
+                        index=4,
                         key=f"nota_{idx}"
                     )
                     respostas_checklist[ponto] = nota
@@ -376,7 +394,6 @@ def tela_principal():
             submeter = st.form_submit_button("💾 Salvar Acompanhamento")
 
         if submeter:
-            # Cálculo da Pontuação Normalizada para a escala de 0 a 100
             soma_notas = sum(respostas_checklist.values())
             total_pontos_possiveis = len(pontos_observar) * 5
             pontuacao_normalizada = (soma_notas / total_pontos_possiveis) * 100 if total_pontos_possiveis > 0 else 0
@@ -678,7 +695,6 @@ def tela_principal():
             df_areas = pd.DataFrame({"Áreas Cadastradas": st.session_state.db["areas"]})
             st.table(df_areas)
 
-    
 # =========================================================
 # 5. EXECUÇÃO DO APLICATIVO
 # =========================================================
