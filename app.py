@@ -24,11 +24,57 @@ st.set_page_config(
 IMGBB_API_KEY = "96c2d6fa3d4537d7af2d3d7f39eb3031"
 DB_FILE = "dados_5s.json"
 
+# Mapeamento dos Checklists por Área
+CHECKLIST_AREAS = {
+    "Cozinha": [
+        "Organização da despensa",
+        "Conservação dos equipamentos",
+        "Materiais em desuso"
+    ],
+    "Salas de Aula": [
+        "Organização do armário da professora",
+        "Conservação dos equipamentos e da sala",
+        "Materiais em desuso ou fora do lugar"
+    ],
+    "Escritório": [
+        "Organização de mesas, armários, documentos e da sala",
+        "Conservação dos equipamentos e materiais em desuso",
+        "Limpeza do espaço"
+    ],
+    "Depósito": [
+        "Organização do depósito",
+        "Limpeza do depósito",
+        "Conservação de prateleiras"
+    ],
+    "Área de Serviço": [
+        "Organização do estoque",
+        "Conservação dos equipamentos",
+        "Materiais em desuso"
+    ],
+    "Pátio": [
+        "Limpeza do pátio"
+    ],
+    "Equipamentos de Segurança": [
+        "Kit de primeiros socorros",
+        "Extintores obstruídos",
+        "Extintores vencidos",
+        "Iluminação de emergência"
+    ]
+}
+
+ESCALA_AVALIACAO = {
+    0: "0 - Muito Ruim",
+    1: "1 - Ruim",
+    2: "2 - Razoável",
+    3: "3 - Bom",
+    4: "4 - Muito Bom",
+    5: "5 - Excelente"
+}
+
 # =========================================================
-# 2. FUNÇÕES DE SUPORTE (IMGBB, BANCO JSON, PDF E E-MAIL)
+# 2. FUNÇÕES DE SUPORTE
 # =========================================================
 def enviar_foto_imgbb(file_bytes, filename):
-    """Envia a imagem para o ImgBB e retorna a URL pública direta."""
     try:
         base64_image = base64.b64encode(file_bytes).decode('utf-8')
         payload = {
@@ -48,32 +94,27 @@ def enviar_foto_imgbb(file_bytes, filename):
         return None
 
 def carregar_dados():
-    """Carrega a base de dados do arquivo JSON local."""
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {
         "usuarios": {"admin": "1234"},
         "acompanhamentos": [],
-        "areas": ["Produção", "Escritório", "Almoxarifado", "Manutenção"]
+        "areas": list(CHECKLIST_AREAS.keys())
     }
 
 def salvar_dados(dados):
-    """Salva a base de dados no arquivo JSON local."""
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=4)
 
 def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanhamentos 5S"):
-    """Gera um documento PDF estilizado a partir de dados de acompanhamentos usando WeasyPrint."""
     data_geracao = datetime.now().strftime("%d/%m/%Y às %H:%M")
-    
     total_acompanhamentos = len(df_acompanhamentos)
     media_geral = df_acompanhamentos["pontuacao"].mean() if total_acompanhamentos > 0 else 0
 
     linhas_tabela = ""
     for idx, row in df_acompanhamentos.iterrows():
         foto_html = f'<a href="{row.get("foto_url")}" target="_blank">Ver Foto</a>' if row.get("foto_url") else 'Sem foto'
-        
         nota = row['pontuacao']
         cor_badge = "#27ae60" if nota >= 80 else ("#f39c12" if nota >= 60 else "#e74c3c")
         
@@ -83,8 +124,8 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
             <td>{row['data']}</td>
             <td><b>{row['area']}</b></td>
             <td>{row['responsavel']}</td>
-            <td style="text-align: center;"><span style="background-color: {cor_badge}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">{nota} / 100</span></td>
-            <td>{row['observacoes'] if row['observacoes'] else '-'}</td>
+            <td style="text-align: center;"><span style="background-color: {cor_badge}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">{nota:.1f} / 100</span></td>
+            <td>{row.get('observacoes', '-')}</td>
             <td style="text-align: center;">{foto_html}</td>
         </tr>
         """
@@ -95,83 +136,19 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
     <head>
         <meta charset="UTF-8">
         <style>
-            @page {{
-                size: A4 portrait;
-                margin: 15mm 12mm;
-                background-color: #faf8f5;
-            }}
-            body {{
-                font-family: 'Helvetica', 'Arial', sans-serif;
-                color: #2c3e50;
-                margin: 0;
-                padding: 0;
-            }}
-            .header {{
-                background-color: #1e3a8a;
-                color: white;
-                padding: 20px;
-                border-radius: 6px;
-                margin-bottom: 20px;
-            }}
-            .header h1 {{
-                margin: 0 0 5px 0;
-                font-size: 22pt;
-            }}
-            .header p {{
-                margin: 0;
-                font-size: 10pt;
-                opacity: 0.85;
-            }}
-            .summary-box {{
-                width: 100%;
-                margin-bottom: 20px;
-                border-collapse: collapse;
-            }}
-            .summary-card {{
-                background-color: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                padding: 12px;
-                text-align: center;
-            }}
-            .summary-card .number {{
-                font-size: 18pt;
-                font-weight: bold;
-                color: #1e3a8a;
-            }}
-            .summary-card .label {{
-                font-size: 9pt;
-                color: #64748b;
-                text-transform: uppercase;
-            }}
-            table.data-table {{
-                width: 100%;
-                border-collapse: collapse;
-                background-color: #ffffff;
-                border-radius: 6px;
-                overflow: hidden;
-            }}
-            table.data-table th {{
-                background-color: #3b82f6;
-                color: white;
-                padding: 8px 10px;
-                font-size: 9pt;
-                text-align: left;
-            }}
-            table.data-table td {{
-                padding: 8px 10px;
-                font-size: 8.5pt;
-                border-bottom: 1px solid #e2e8f0;
-            }}
-            table.data-table tr:nth-child(even) {{
-                background-color: #f8fafc;
-            }}
-            .footer {{
-                margin-top: 30px;
-                text-align: center;
-                font-size: 8pt;
-                color: #94a3b8;
-            }}
+            @page {{ size: A4 portrait; margin: 15mm 12mm; }}
+            body {{ font-family: 'Helvetica', 'Arial', sans-serif; color: #2c3e50; margin: 0; }}
+            .header {{ background-color: #1e3a8a; color: white; padding: 20px; border-radius: 6px; margin-bottom: 20px; }}
+            .header h1 {{ margin: 0 0 5px 0; font-size: 20pt; }}
+            .summary-box {{ width: 100%; margin-bottom: 20px; border-collapse: collapse; }}
+            .summary-card {{ background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; text-align: center; }}
+            .summary-card .number {{ font-size: 18pt; font-weight: bold; color: #1e3a8a; }}
+            .summary-card .label {{ font-size: 9pt; color: #64748b; text-transform: uppercase; }}
+            table.data-table {{ width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 6px; overflow: hidden; }}
+            table.data-table th {{ background-color: #3b82f6; color: white; padding: 8px 10px; font-size: 9pt; text-align: left; }}
+            table.data-table td {{ padding: 8px 10px; font-size: 8.5pt; border-bottom: 1px solid #e2e8f0; }}
+            table.data-table tr:nth-child(even) {{ background-color: #f8fafc; }}
+            .footer {{ margin-top: 30px; text-align: center; font-size: 8pt; color: #94a3b8; }}
         </style>
     </head>
     <body>
@@ -206,7 +183,7 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
                     <th style="width: 15%;">Área</th>
                     <th style="width: 15%;">Responsável</th>
                     <th style="width: 12%;">Pontuação</th>
-                    <th style="width: 25%;">Observações</th>
+                    <th style="width: 25%;">Observações Gerais</th>
                     <th style="width: 10%;">Foto</th>
                 </tr>
             </thead>
@@ -221,14 +198,12 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
     </body>
     </html>
     """
-    
     pdf_bytes = io.BytesIO()
     HTML(string=html_content).write_pdf(pdf_bytes)
     pdf_bytes.seek(0)
     return pdf_bytes.getvalue()
 
 def enviar_relatorio_email(destinatario, assunto, mensagem_texto, pdf_bytes, nome_arquivo_pdf="Relatorio_5S.pdf", smtp_config=None):
-    """Envia o e-mail contendo o relatório em formato PDF anexado."""
     try:
         smtp_server = smtp_config.get("server") if smtp_config else "smtp.gmail.com"
         smtp_port = smtp_config.get("port") if smtp_config else 587
@@ -241,7 +216,6 @@ def enviar_relatorio_email(destinatario, assunto, mensagem_texto, pdf_bytes, nom
         msg['Subject'] = assunto
 
         msg.attach(MIMEText(mensagem_texto, 'plain'))
-
         attachment = MIMEApplication(pdf_bytes, _subtype="pdf")
         attachment.add_header('Content-Disposition', 'attachment', filename=nome_arquivo_pdf)
         msg.attach(attachment)
@@ -255,15 +229,9 @@ def enviar_relatorio_email(destinatario, assunto, mensagem_texto, pdf_bytes, nom
     except Exception as e:
         return False, f"Falha no envio de e-mail: {e}"
 
-# Carregamento e compatibilidade de dados
+# Inicialização da Sessão
 if "db" not in st.session_state:
-    dados_carregados = carregar_dados()
-    if "auditorias" in dados_carregados and "acompanhamentos" not in dados_carregados:
-        dados_carregados["acompanhamentos"] = dados_carregados.pop("auditorias")
-        for item in dados_carregados["acompanhamentos"]:
-            if "auditor" in item:
-                item["responsavel"] = item.pop("auditor")
-    st.session_state.db = dados_carregados
+    st.session_state.db = carregar_dados()
 
 if "usuario_logado" not in st.session_state:
     st.session_state.usuario_logado = None
@@ -317,13 +285,13 @@ def tela_principal():
         "Navegação",
         [
             "Dashboard",
-            "Novo Acompanhamento / Registro",
+            "Novo Acompanhamento / Checklist",
             "Editar / Gerenciar Acompanhamentos",
             "Relatório Filtrado & Exportação PDF",
             "Relatório Geral 5S (Executivo)",
             "Enviar Relatório por E-mail",
             "Gestão de Áreas",
-            
+            "Assistente IA 5S"
         ]
     )
 
@@ -346,62 +314,93 @@ def tela_principal():
         col3.metric("Último Acompanhamento", df['data'].max())
 
         st.markdown("---")
-        st.subheader("Pontuação Média por Área")
+        st.subheader("Pontuação Média por Área (Escala 0 a 100)")
         grafico_area = df.groupby("area")["pontuacao"].mean().reset_index()
         st.bar_chart(grafico_area.set_index("area"))
 
     # -----------------------------------------------------
-    # ABA 2: NOVO ACOMPANHAMENTO
+    # ABA 2: NOVO ACOMPANHAMENTO (CHECKLIST CUSTOMIZADO)
     # -----------------------------------------------------
-    elif opcao == "Novo Acompanhamento / Registro":
+    elif opcao == "Novo Acompanhamento / Checklist":
         st.title("📝 Novo Registro de Acompanhamento 5S")
+        st.caption("Selecione a área para carregar os pontos de verificação específicos.")
         
         if not st.session_state.db["areas"]:
             st.warning("Nenhuma área cadastrada. Cadastre áreas na aba 'Gestão de Áreas' antes de continuar.")
             return
 
-        with st.form("form_acompanhamento", clear_on_submit=True):
-            area = st.selectbox("Selecione a Área:", st.session_state.db["areas"])
+        # Seleção de Área fora do form para atualizar o checklist dinamicamente
+        area_selecionada = st.selectbox("Selecione a Área para Auditoria:", st.session_state.db["areas"])
+        
+        # Obtém a lista de pontos a observar para a área escolhida (ou uma lista genérica caso seja nova)
+        pontos_observar = CHECKLIST_AREAS.get(
+            area_selecionada, 
+            ["Organização Geral", "Limpeza e Higiene", "Conservação de Equipamentos e Espaço"]
+        )
+
+        with st.form("form_checklist_5s"):
             responsavel = st.text_input("Responsável pelo Acompanhamento:", value=st.session_state.usuario_logado)
             
-            st.subheader("Avaliação dos 5 Sensos (0 a 20 pontos cada)")
-            seiri = st.slider("1. Seiri (Utilização)", 0, 20, 15)
-            seiton = st.slider("2. Seiton (Organização)", 0, 20, 15)
-            seiso = st.slider("3. Seiso (Limpeza)", 0, 20, 15)
-            seiketsu = st.slider("4. Seiketsu (Padronização)", 0, 20, 15)
-            shitsuke = st.slider("5. Shitsuke (Disciplina)", 0, 20, 15)
+            st.markdown("---")
+            st.subheader(f"📋 Checklist de Avaliação - Área: {area_selecionada}")
+            st.caption("Grau de Aplicação: 0 = Muito Ruim | 1 = Ruim | 2 = Razoável | 3 = Bom | 4 = Muito Bom | 5 = Excelente")
 
-            observacoes = st.text_area("Observações / Pontos de Melhoria:")
-            foto = st.file_uploader("Enviar Foto do Acompanhamento:", type=["png", "jpg", "jpeg"])
+            respostas_checklist = {}
+            observacoes_checklist = {}
 
-            submeter = st.form_submit_button("Salvar Registro")
+            # Geração dinâmica dos itens do checklist
+            for idx, ponto in enumerate(pontos_observar):
+                st.markdown(f"**Item {idx + 1}: {ponto}**")
+                col_nota, col_obs = st.columns([1, 2])
+                
+                with col_nota:
+                    nota = st.selectbox(
+                        f"Grau de aplicação:",
+                        options=list(ESCALA_AVALIACAO.keys()),
+                        format_func=lambda x: ESCALA_AVALIACAO[x],
+                        index=4, # Padrão: Muito Bom
+                        key=f"nota_{idx}"
+                    )
+                    respostas_checklist[ponto] = nota
+
+                with col_obs:
+                    obs_item = st.text_input(f"Observações sobre '{ponto}':", key=f"obs_{idx}", placeholder="Detalhes ou pontos de melhoria...")
+                    observacoes_checklist[ponto] = obs_item
+                
+                st.markdown("<hr style='margin: 10px 0; border-top: 1px dashed #ddd;'>", unsafe_allow_html=True)
+
+            st.subheader("Observações Gerais / Conclusão")
+            observacoes_gerais = st.text_area("Observações Finais do Acompanhamento:")
+            foto = st.file_uploader("Enviar Foto do Local / Evidência:", type=["png", "jpg", "jpeg"])
+
+            submeter = st.form_submit_button("💾 Salvar Acompanhamento")
 
         if submeter:
-            pontuacao_total = seiri + seiton + seiso + seiketsu + shitsuke
-            url_foto = None
+            # Cálculo da Pontuação Normalizada para a escala de 0 a 100
+            soma_notas = sum(respostas_checklist.values())
+            total_pontos_possiveis = len(pontos_observar) * 5
+            pontuacao_normalizada = (soma_notas / total_pontos_possiveis) * 100 if total_pontos_possiveis > 0 else 0
 
+            url_foto = None
             if foto is not None:
-                with st.spinner("Enviando foto para a nuvem..."):
+                with st.spinner("Enviando imagem..."):
                     url_foto = enviar_foto_imgbb(foto.getvalue(), foto.name)
 
             registro = {
                 "id": len(st.session_state.db["acompanhamentos"]) + 1,
                 "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "area": area,
+                "area": area_selecionada,
                 "responsavel": responsavel,
-                "seiri": seiri,
-                "seiton": seiton,
-                "seiso": seiso,
-                "seiketsu": seiketsu,
-                "shitsuke": shitsuke,
-                "pontuacao": pontuacao_total,
-                "observacoes": observacoes,
+                "checklist": respostas_checklist,
+                "observacoes_itens": observacoes_checklist,
+                "pontuacao": round(pontuacao_normalizada, 1),
+                "observacoes": observacoes_gerais,
                 "foto_url": url_foto
             }
 
             st.session_state.db["acompanhamentos"].append(registro)
             salvar_dados(st.session_state.db)
-            st.success(f"Acompanhamento registrado com sucesso! Pontuação Final: {pontuacao_total}/100")
+            st.success(f"Acompanhamento salvo! Pontuação Final Alcançada: {pontuacao_normalizada:.1f} / 100")
 
     # -----------------------------------------------------
     # ABA 3: EDITAR / GERENCIAR ACOMPANHAMENTOS
@@ -424,22 +423,10 @@ def tela_principal():
         st.subheader(f"Editando Registro ID #{acompanhamento_atual['id']}")
 
         with st.form("form_edicao"):
-            area = st.selectbox(
-                "Área:", 
-                st.session_state.db["areas"], 
-                index=st.session_state.db["areas"].index(acompanhamento_atual["area"]) if acompanhamento_atual["area"] in st.session_state.db["areas"] else 0
-            )
-            responsavel = st.text_input("Responsável:", value=acompanhamento_atual.get("responsavel", acompanhamento_atual.get("auditor", "")))
+            responsavel = st.text_input("Responsável:", value=acompanhamento_atual.get("responsavel", ""))
+            observacoes = st.text_area("Observações Gerais:", value=acompanhamento_atual.get("observacoes", ""))
             
-            seiri = st.slider("1. Seiri (Utilização)", 0, 20, int(acompanhamento_atual.get("seiri", 15)))
-            seiton = st.slider("2. Seiton (Organização)", 0, 20, int(acompanhamento_atual.get("seiton", 15)))
-            seiso = st.slider("3. Seiso (Limpeza)", 0, 20, int(acompanhamento_atual.get("seiso", 15)))
-            seiketsu = st.slider("4. Seiketsu (Padronização)", 0, 20, int(acompanhamento_atual.get("seiketsu", 15)))
-            shitsuke = st.slider("5. Shitsuke (Disciplina)", 0, 20, int(acompanhamento_atual.get("shitsuke", 15)))
-
-            observacoes = st.text_area("Observações:", value=acompanhamento_atual.get("observacoes", ""))
-            
-            st.write("Foto atual:")
+            st.write("Foto cadastrada:")
             if acompanhamento_atual.get("foto_url"):
                 st.image(acompanhamento_atual["foto_url"], width=200)
             else:
@@ -457,16 +444,7 @@ def tela_principal():
                 with st.spinner("Atualizando foto no ImgBB..."):
                     nova_url_foto = enviar_foto_imgbb(nova_foto.getvalue(), nova_foto.name)
 
-            pontuacao_total = seiri + seiton + seiso + seiketsu + shitsuke
-            
-            st.session_state.db["acompanhamentos"][idx_selecionado]["area"] = area
             st.session_state.db["acompanhamentos"][idx_selecionado]["responsavel"] = responsavel
-            st.session_state.db["acompanhamentos"][idx_selecionado]["seiri"] = seiri
-            st.session_state.db["acompanhamentos"][idx_selecionado]["seiton"] = seiton
-            st.session_state.db["acompanhamentos"][idx_selecionado]["seiso"] = seiso
-            st.session_state.db["acompanhamentos"][idx_selecionado]["seiketsu"] = seiketsu
-            st.session_state.db["acompanhamentos"][idx_selecionado]["shitsuke"] = shitsuke
-            st.session_state.db["acompanhamentos"][idx_selecionado]["pontuacao"] = pontuacao_total
             st.session_state.db["acompanhamentos"][idx_selecionado]["observacoes"] = observacoes
             st.session_state.db["acompanhamentos"][idx_selecionado]["foto_url"] = nova_url_foto
 
@@ -530,7 +508,7 @@ def tela_principal():
         else:
             m1, m2 = st.columns(2)
             m1.metric("Média das Notas Filtradas", f"{df_filtrado['pontuacao'].mean():.1f} / 100")
-            m2.metric("Maior Pontuação do Período", f"{df_filtrado['pontuacao'].max()} / 100")
+            m2.metric("Maior Pontuação do Período", f"{df_filtrado['pontuacao'].max():.1f} / 100")
 
             st.dataframe(
                 df_filtrado[["id", "data", "area", "responsavel", "pontuacao", "observacoes"]], 
@@ -570,36 +548,12 @@ def tela_principal():
 
         df = pd.DataFrame(acompanhamentos)
 
-        st.markdown("""
-        Este painel consolidado apresenta o **desempenho global do programa 5S**, discriminado por cada um dos 
-        cinco sensos, identificando áreas de destaque e oportunidades de melhoria operacional.
-        """)
+        st.markdown("Este painel consolidado apresenta o **desempenho global do programa 5S** em todas as áreas cadastradas.")
 
-        med_seiri = df["seiri"].fillna(15).mean() if "seiri" in df.columns else 15
-        med_seiton = df["seiton"].fillna(15).mean() if "seiton" in df.columns else 15
-        med_seiso = df["seiso"].fillna(15).mean() if "seiso" in df.columns else 15
-        med_seiketsu = df["seiketsu"].fillna(15).mean() if "seiketsu" in df.columns else 15
-        med_shitsuke = df["shitsuke"].fillna(15).mean() if "shitsuke" in df.columns else 15
-
-        st.subheader("1. Desempenho por Senso (Média de 0 a 20 pontos)")
-        col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
-        col_s1.metric("1. Seiri (Utilização)", f"{med_seiri:.1f}")
-        col_s2.metric("2. Seiton (Organização)", f"{med_seiton:.1f}")
-        col_s3.metric("3. Seiso (Limpeza)", f"{med_seiso:.1f}")
-        col_s4.metric("4. Seiketsu (Padronização)", f"{med_seiketsu:.1f}")
-        col_s5.metric("5. Shitsuke (Disciplina)", f"{med_shitsuke:.1f}")
-
-        df_sensos = pd.DataFrame({
-            "Senso": ["Seiri (Utilização)", "Seiton (Organização)", "Seiso (Limpeza)", "Seiketsu (Padronização)", "Shitsuke (Disciplina)"],
-            "Média Geral": [med_seiri, med_seiton, med_seiso, med_seiketsu, med_shitsuke]
-        })
-        st.bar_chart(df_sensos.set_index("Senso"))
-
-        st.markdown("---")
-        st.subheader("2. Ranking Geral das Áreas")
+        st.subheader("Ranking Geral das Áreas")
         ranking = df.groupby("area")["pontuacao"].agg(["count", "mean", "min", "max"]).reset_index()
-        ranking.columns = ["Área", "Total Acompanhamentos", "Média Nota", "Menor Nota", "Maior Nota"]
-        ranking = ranking.sort_values(by="Média Nota", ascending=False)
+        ranking.columns = ["Área", "Total Acompanhamentos", "Média Nota (0-100)", "Menor Nota", "Maior Nota"]
+        ranking = ranking.sort_values(by="Média Nota (0-100)", ascending=False)
         st.dataframe(ranking, use_container_width=True)
 
         pdf_geral = gerar_pdf_html(df, "Relatório Geral Consolidado 5S")
@@ -623,16 +577,12 @@ def tela_principal():
 
         df = pd.DataFrame(acompanhamentos)
 
-        st.write("Envie o relatório em PDF atualizado diretamente para a diretoria, gerentes de área ou responsáveis.")
-
         with st.form("form_email"):
             email_destino = st.text_input("E-mail do Destinatário:", placeholder="gerente@empresa.com")
             assunto = st.text_input("Assunto do E-mail:", value="Relatório Consolidado de Acompanhamentos 5S")
-            mensagem = st.text_area("Mensagem:", value="Olá,\n\nSegue em anexo o relatório atualizado dos acompanhamentos 5S com os resultados e links de fotos.\n\nAtenciosamente,\nEquipe de Qualidade e 5S")
+            mensagem = st.text_area("Mensagem:", value="Olá,\n\nSegue em anexo o relatório atualizado dos acompanhamentos 5S com os resultados e observações.\n\nAtenciosamente,\nEquipe de Qualidade")
 
             st.subheader("Configuração de Envio (SMTP)")
-            st.caption("Insira os dados do seu servidor SMTP (Ex: Gmail, Outlook ou servidor próprio):")
-
             col_s1, col_s2 = st.columns(2)
             smtp_server = col_s1.text_input("Servidor SMTP:", value="smtp.gmail.com")
             smtp_port = col_s2.number_input("Porta SMTP:", value=587)
@@ -672,14 +622,13 @@ def tela_principal():
                         st.error(msg_resultado)
 
     # -----------------------------------------------------
-    # ABA 7: GESTÃO COMPLETA DE ÁREAS (EXPANDIDA)
+    # ABA 7: GESTÃO DE ÁREAS
     # -----------------------------------------------------
     elif opcao == "Gestão de Áreas":
         st.title("🏢 Gestão de Áreas")
         
         tab_add, tab_edit, tab_del = st.tabs(["➕ Cadastrar Área", "✏️ Editar Área", "🗑️ Excluir Área"])
 
-        # TAB CADASTRAR
         with tab_add:
             st.subheader("Adicionar Nova Área")
             nova_area = st.text_input("Nome da Nova Área:", key="input_nova_area")
@@ -693,10 +642,7 @@ def tela_principal():
                         st.rerun()
                     else:
                         st.warning("Esta área já está cadastrada.")
-                else:
-                    st.warning("O nome da área não pode ser vazio.")
 
-        # TAB EDITAR
         with tab_edit:
             st.subheader("Editar Nome de uma Área")
             if not st.session_state.db["areas"]:
@@ -710,27 +656,16 @@ def tela_principal():
                     if novo_nome_clean:
                         idx = st.session_state.db["areas"].index(area_selecionada)
                         st.session_state.db["areas"][idx] = novo_nome_clean
-                        
-                        # Atualiza histórico de acompanhamentos com o novo nome da área
-                        for ac in st.session_state.db["acompanhamentos"]:
-                            if ac.get("area") == area_selecionada:
-                                ac["area"] = novo_nome_clean
-
                         salvar_dados(st.session_state.db)
                         st.success(f"Área atualizada para '{novo_nome_clean}'!")
                         st.rerun()
-                    else:
-                        st.warning("O novo nome da área não pode ser vazio.")
 
-        # TAB EXCLUIR
         with tab_del:
             st.subheader("Remover uma Área")
             if not st.session_state.db["areas"]:
                 st.info("Nenhuma área cadastrada.")
             else:
                 area_para_remover = st.selectbox("Selecione a área para excluir:", st.session_state.db["areas"], key="select_del_area")
-                st.caption("⚠️ Nota: Excluir uma área não apaga os acompanhamentos antigos salvos com ela.")
-                
                 if st.button("Remover Área", type="primary"):
                     st.session_state.db["areas"].remove(area_para_remover)
                     salvar_dados(st.session_state.db)
@@ -742,10 +677,31 @@ def tela_principal():
         if st.session_state.db["areas"]:
             df_areas = pd.DataFrame({"Áreas Cadastradas": st.session_state.db["areas"]})
             st.table(df_areas)
-        else:
-            st.info("Nenhuma área cadastrada no sistema.")
 
-   
+    # -----------------------------------------------------
+    # ABA 8: CHAT COM ASSISTENTE IA 5S
+    # -----------------------------------------------------
+    elif opcao == "Assistente IA 5S":
+        st.title("🤖 Assistente Virtual 5S")
+        st.write("Tire dúvidas sobre padronização, acompanhamentos e melhorias do programa 5S.")
+
+        if "mensagens_chat" not in st.session_state:
+            st.session_state.mensagens_chat = [
+                {"role": "assistant", "content": "Olá! Como posso ajudar na implementação e acompanhamento do 5S hoje?"}
+            ]
+
+        for msg in st.session_state.mensagens_chat:
+            st.chat_message(msg["role"]).write(msg["content"])
+
+        if prompt := st.chat_input("Digite sua dúvida..."):
+            st.session_state.mensagens_chat.append({"role": "user", "content": prompt})
+            st.chat_message("user").write(prompt)
+
+            resposta = f"Em relação ao 5S: Para a dúvida '{prompt}', a recomendação principal é focar no senso de Padronização (Seiketsu), mantendo regras visuais claras para toda a equipe."
+            
+            st.session_state.mensagens_chat.append({"role": "assistant", "content": resposta})
+            st.chat_message("assistant").write(resposta)
+
 # =========================================================
 # 5. EXECUÇÃO DO APLICATIVO
 # =========================================================
