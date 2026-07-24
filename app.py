@@ -67,7 +67,6 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
     """Gera um documento PDF estilizado a partir de dados de acompanhamentos usando WeasyPrint."""
     data_geracao = datetime.now().strftime("%d/%m/%Y às %H:%M")
     
-    # Cálculo de métricas para o cabeçalho do PDF
     total_acompanhamentos = len(df_acompanhamentos)
     media_geral = df_acompanhamentos["pontuacao"].mean() if total_acompanhamentos > 0 else 0
 
@@ -75,7 +74,6 @@ def gerar_pdf_html(df_acompanhamentos, titulo_relatorio="Relatório de Acompanha
     for idx, row in df_acompanhamentos.iterrows():
         foto_html = f'<a href="{row.get("foto_url")}" target="_blank">Ver Foto</a>' if row.get("foto_url") else 'Sem foto'
         
-        # Cor de destaque conforme a nota
         nota = row['pontuacao']
         cor_badge = "#27ae60" if nota >= 80 else ("#f39c12" if nota >= 60 else "#e74c3c")
         
@@ -257,7 +255,7 @@ def enviar_relatorio_email(destinatario, assunto, mensagem_texto, pdf_bytes, nom
     except Exception as e:
         return False, f"Falha no envio de e-mail: {e}"
 
-# Compatibilidade retroativa para chave antiga "auditorias" no JSON
+# Carregamento e compatibilidade de dados
 if "db" not in st.session_state:
     dados_carregados = carregar_dados()
     if "auditorias" in dados_carregados and "acompanhamentos" not in dados_carregados:
@@ -358,6 +356,10 @@ def tela_principal():
     elif opcao == "Novo Acompanhamento / Registro":
         st.title("📝 Novo Registro de Acompanhamento 5S")
         
+        if not st.session_state.db["areas"]:
+            st.warning("Nenhuma área cadastrada. Cadastre áreas na aba 'Gestão de Áreas' antes de continuar.")
+            return
+
         with st.form("form_acompanhamento", clear_on_submit=True):
             area = st.selectbox("Selecione a Área:", st.session_state.db["areas"])
             responsavel = st.text_input("Responsável pelo Acompanhamento:", value=st.session_state.usuario_logado)
@@ -670,24 +672,78 @@ def tela_principal():
                         st.error(msg_resultado)
 
     # -----------------------------------------------------
-    # ABA 7: GESTÃO DE ÁREAS
+    # ABA 7: GESTÃO COMPLETA DE ÁREAS (EXPANDIDA)
     # -----------------------------------------------------
     elif opcao == "Gestão de Áreas":
-        st.title("🏢 Gerenciamento de Áreas")
+        st.title("🏢 Gestão de Áreas")
         
-        nova_area = st.text_input("Cadastrar Nova Área:")
-        if st.button("Adicionar Área"):
-            if nova_area and nova_area not in st.session_state.db["areas"]:
-                st.session_state.db["areas"].append(nova_area)
-                salvar_dados(st.session_state.db)
-                st.success(f"Área '{nova_area}' cadastrada!")
-                st.rerun()
-            else:
-                st.warning("Área inválida ou já cadastrada.")
+        tab_add, tab_edit, tab_del = st.tabs(["➕ Cadastrar Área", "✏️ Editar Área", "🗑️ Excluir Área"])
 
-        st.subheader("Áreas Atuais:")
-        for area in st.session_state.db["areas"]:
-            st.write(f"- {area}")
+        # TAB CADASTRAR
+        with tab_add:
+            st.subheader("Adicionar Nova Área")
+            nova_area = st.text_input("Nome da Nova Área:", key="input_nova_area")
+            if st.button("Cadastrar Área"):
+                nova_area_clean = nova_area.strip()
+                if nova_area_clean:
+                    if nova_area_clean not in st.session_state.db["areas"]:
+                        st.session_state.db["areas"].append(nova_area_clean)
+                        salvar_dados(st.session_state.db)
+                        st.success(f"Área '{nova_area_clean}' cadastrada com sucesso!")
+                        st.rerun()
+                    else:
+                        st.warning("Esta área já está cadastrada.")
+                else:
+                    st.warning("O nome da área não pode ser vazio.")
+
+        # TAB EDITAR
+        with tab_edit:
+            st.subheader("Editar Nome de uma Área")
+            if not st.session_state.db["areas"]:
+                st.info("Nenhuma área disponível para edição.")
+            else:
+                area_selecionada = st.selectbox("Selecione a área para alterar:", st.session_state.db["areas"], key="select_edit_area")
+                novo_nome_area = st.text_input("Novo Nome da Área:", value=area_selecionada, key="input_edit_area")
+                
+                if st.button("Salvar Alteração da Área"):
+                    novo_nome_clean = novo_nome_area.strip()
+                    if novo_nome_clean:
+                        idx = st.session_state.db["areas"].index(area_selecionada)
+                        st.session_state.db["areas"][idx] = novo_nome_clean
+                        
+                        # Atualiza histórico de acompanhamentos com o novo nome da área
+                        for ac in st.session_state.db["acompanhamentos"]:
+                            if ac.get("area") == area_selecionada:
+                                ac["area"] = novo_nome_clean
+
+                        salvar_dados(st.session_state.db)
+                        st.success(f"Área atualizada para '{novo_nome_clean}'!")
+                        st.rerun()
+                    else:
+                        st.warning("O novo nome da área não pode ser vazio.")
+
+        # TAB EXCLUIR
+        with tab_del:
+            st.subheader("Remover uma Área")
+            if not st.session_state.db["areas"]:
+                st.info("Nenhuma área cadastrada.")
+            else:
+                area_para_remover = st.selectbox("Selecione a área para excluir:", st.session_state.db["areas"], key="select_del_area")
+                st.caption("⚠️ Nota: Excluir uma área não apaga os acompanhamentos antigos salvos com ela.")
+                
+                if st.button("Remover Área", type="primary"):
+                    st.session_state.db["areas"].remove(area_para_remover)
+                    salvar_dados(st.session_state.db)
+                    st.warning(f"Área '{area_para_remover}' removida com sucesso!")
+                    st.rerun()
+
+        st.markdown("---")
+        st.subheader("📋 Lista de Áreas Cadastradas Atualmente")
+        if st.session_state.db["areas"]:
+            df_areas = pd.DataFrame({"Áreas Cadastradas": st.session_state.db["areas"]})
+            st.table(df_areas)
+        else:
+            st.info("Nenhuma área cadastrada no sistema.")
 
     # -----------------------------------------------------
     # ABA 8: CHAT COM ASSISTENTE IA 5S
