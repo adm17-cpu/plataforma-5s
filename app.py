@@ -291,7 +291,7 @@ def tela_principal():
             "Relatório Geral 5S (Executivo)",
             "Enviar Relatório por E-mail",
             "Gestão de Áreas",
-            "Assistente IA 5S"
+            
         ]
     )
 
@@ -678,30 +678,7 @@ def tela_principal():
             df_areas = pd.DataFrame({"Áreas Cadastradas": st.session_state.db["areas"]})
             st.table(df_areas)
 
-    # -----------------------------------------------------
-    # ABA 8: CHAT COM ASSISTENTE IA 5S
-    # -----------------------------------------------------
-    elif opcao == "Assistente IA 5S":
-        st.title("🤖 Assistente Virtual 5S")
-        st.write("Tire dúvidas sobre padronização, acompanhamentos e melhorias do programa 5S.")
-
-        if "mensagens_chat" not in st.session_state:
-            st.session_state.mensagens_chat = [
-                {"role": "assistant", "content": "Olá! Como posso ajudar na implementação e acompanhamento do 5S hoje?"}
-            ]
-
-        for msg in st.session_state.mensagens_chat:
-            st.chat_message(msg["role"]).write(msg["content"])
-
-        if prompt := st.chat_input("Digite sua dúvida..."):
-            st.session_state.mensagens_chat.append({"role": "user", "content": prompt})
-            st.chat_message("user").write(prompt)
-
-            resposta = f"Em relação ao 5S: Para a dúvida '{prompt}', a recomendação principal é focar no senso de Padronização (Seiketsu), mantendo regras visuais claras para toda a equipe."
-            
-            st.session_state.mensagens_chat.append({"role": "assistant", "content": resposta})
-            st.chat_message("assistant").write(resposta)
-
+    
 # =========================================================
 # 5. EXECUÇÃO DO APLICATIVO
 # =========================================================
